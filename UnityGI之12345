@@ -1,0 +1,28 @@
+
+1.	Enlighten vs Progressive。
+Enlighten支持方向图，progressive不支持？
+2.	LIGHTMAP_ON vs DYNAMICLIGHTMAP_ON
+struct UnityGIInput
+{
+    UnityLight light; // pixel light, sent from the engine
+
+    float3 worldPos;
+    half3 worldViewDir;
+    half atten;
+    half3 ambient;
+
+    // interpolated lightmap UVs are passed as full float precision data to fragment shaders
+    // so lightmapUV (which is used as a tmp inside of lightmap fragment shaders) should
+    // also be full float precision to avoid data loss before sampling a texture.
+    float4 lightmapUV; // .xy = static lightmap UV, .zw = dynamic lightmap UV
+
+inline half4 VertexGIForward(VertexInput v, float3 posWorld, half3 normalWorld)
+在VertexInput中uv0是原始uv，uv1用于静态lightmap，uv2用于动态lightmap，在这个函数中组织了ambientOrLightMapUV，rg是static lightmap使用，zw是dynamic lightmap使用，会在FrameMentGI中赋值给UnityGIInput.lightmapUV。
+
+inline UnityGI UnityGI_Base(UnityGIInput data, half occlusion, half3 normalWorld)
+计算GI，使用lightmapUV，静态和动态lightmap分别加入了间接光的diffuse，如下：
+UnityGI o_gi;
+o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
+..)
+
+3.静态物体occlusion使用shadowmask，动态或其他对象使用light probe volume。阴影是带有颜色的，纯粹的黑色阴影实际很少。阴影暗部进行补光（守望先锋）
