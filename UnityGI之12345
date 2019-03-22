@@ -108,3 +108,6 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
     "unity_SpecCube0",                  \
     "unity_SpecCube1",                  \
     "unity_ProbeVolumeSH"               \
+6. 动态lightmap，C++中的位置：RenderQueue.cpp
+   static void SetupRealtimeLightmaps(const SharedLightmapSettingsData& lightmapper, UInt32 lightmapIndex, ShaderPassContext& passContext)
+7. Progressive方式可关注BakeContextManager.h
