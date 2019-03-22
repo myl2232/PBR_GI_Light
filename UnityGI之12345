@@ -1,6 +1,6 @@
 
 1. Enlighten vs Progressive。
-Enlighten支持方向图，progressive不支持？
+  是否支持方向图由Lightmapping Setting->Directinal Mode觉得，一般不需要。
 
 2. LIGHTMAP_ON vs DYNAMICLIGHTMAP_ON
 struct UnityGIInput
