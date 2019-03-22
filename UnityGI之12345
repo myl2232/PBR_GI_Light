@@ -83,3 +83,28 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
       kShaderTexEnvCount
    };
    如kShaderTexEnvSpecCube就是用于shader中的unity_SpecCube0，用于在UnityGI_IndirectSpecular中计算IBL间接高光。在C++中可以在ReflectionProbeCache.cpp中看到生成过程。
+   它们在shader中的名字由下面的宏定义：
+   #define BUILTIN_SHADER_PARAMS_TEXENVS   \
+    "white",                            \
+    "black",                            \
+    "red",                              \
+    "gray",                             \
+    "grey",                             \
+    "grayscaleRamp",                    \
+    "greyscaleRamp",                    \
+    "bump",                             \
+    "blackCube",                        \
+    "lightmap",                         \
+    "unity_Lightmap",                   \
+    "unity_LightmapInd",                \
+    "unity_ShadowMask",         \
+    "unity_DynamicLightmap",            \
+    "unity_DynamicDirectionality",      \
+    "unity_DynamicNormal",              \
+    "_DitherMaskLOD",                   \
+    "_DitherMaskLOD2D",                 \
+    "unity_RandomRotation16",           \
+    "unity_NHxRoughness",               \
+    "unity_SpecCube0",                  \
+    "unity_SpecCube1",                  \
+    "unity_ProbeVolumeSH"               \
