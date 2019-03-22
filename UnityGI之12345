@@ -112,5 +112,5 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
    static void SetupRealtimeLightmaps(const SharedLightmapSettingsData& lightmapper, UInt32 lightmapIndex, ShaderPassContext& passContext)
 7. Progressive方式可关注BakeContextManager.h 以及 PVRJobRender.h
    bool BakeContextManager::RenderLightmaps(const Hash128& hash, BakeLightmapTechnique* lightmapBake)
-   bool LightmapBakeTechnique::Bake()
+   bool LightmapBakeTechnique::Bake()---这里面填充了很多rl需要的参数
    void RenderTechnique::RenderFrame()----这是OpenRL的一套光线跟踪渲染插件的包装
