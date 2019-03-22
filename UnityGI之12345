@@ -1,6 +1,7 @@
 
 1. Enlighten vs Progressive。
 Enlighten支持方向图，progressive不支持？
+
 2. LIGHTMAP_ON vs DYNAMICLIGHTMAP_ON
 struct UnityGIInput
 {
@@ -15,9 +16,12 @@ struct UnityGIInput
     // so lightmapUV (which is used as a tmp inside of lightmap fragment shaders) should
     // also be full float precision to avoid data loss before sampling a texture.
     float4 lightmapUV; // .xy = static lightmap UV, .zw = dynamic lightmap UV
+..
+}
 
 inline half4 VertexGIForward(VertexInput v, float3 posWorld, half3 normalWorld)
-在VertexInput中uv0是原始uv，uv1用于静态lightmap，uv2用于动态lightmap，在这个函数中组织了ambientOrLightMapUV，rg是static lightmap使用，zw是dynamic lightmap使用，会在FrameMentGI中赋值给UnityGIInput.lightmapUV。
+在VertexInput中uv0是原始uv，uv1用于静态lightmap，uv2用于动态lightmap，在这个函数中组织了ambientOrLightMapUV，rg是static lightmap使用，zw是dynamic lightmap使用，
+会在FrameMentGI中赋值给UnityGIInput.lightmapUV。
 
 inline UnityGI UnityGI_Base(UnityGIInput data, half occlusion, half3 normalWorld)
 计算GI，使用lightmapUV，静态和动态lightmap分别加入了间接光的diffuse，如下：
@@ -25,4 +29,57 @@ UnityGI o_gi;
 o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
 ..)
 
-3.静态物体occlusion使用shadowmask，动态或其他对象使用light probe volume。阴影是带有颜色的，纯粹的黑色阴影实际很少。阴影暗部进行补光（守望先锋）
+3.静态物体occlusion使用shadowmask，动态或其他对象使用light probe volume。阴影是带有颜色的，纯粹的黑色阴影实际很少。阴影暗部进行补光（Baked light, 如守望先锋）
+
+4.IBL主要体现在以下函数：
+  inline half3 UnityGI_IndirectSpecular(UnityGIInput data, half occlusion, Unity_GlossyEnvironmentData glossIn)
+  {
+      ...
+      half3 env0 = Unity_GlossyEnvironment (UNITY_PASS_TEXCUBE(unity_SpecCube0), data.probeHDR[0], glossIn);
+  }
+
+5. GfxDeviceObjects.h定义了一些的全局贴图，如IBL需要的全局高光
+   enum BuiltinPerRendererTexture
+   {
+      kLightMapRealTime,
+      kLightMapRealTimeDir,
+      kLightMapBaked,
+      kLightMapBakedDir,
+      kProbeProxyVolume,
+      kSpecularCube1,
+      kSpecularCube2,
+
+      kBuiltInTextureCountMax
+   };
+   ScriptableBatchRender.cpp包含了它们的生成使用过程，这个类的使用范围宏定义如下：
+   #define     GFX_SUPPORTS_SRP_BATCHER        ((GFX_SUPPORTS_D3D11 || GFX_SUPPORTS_VULKAN || PLATFORM_PS4 || GFX_SUPPORTS_METAL) && (!GFX_SUPPORTS_XBOXONE))
+   ----------------------------------------------------------------------以上应该没用到mobile------------------------------------
+   BuiltinShaderProgramsName.h定义了所有的全局环境贴图，如下：
+   enum BuiltinShaderTexEnvParam
+   {
+      kShaderTexEnvWhite = 0,
+      kShaderTexEnvBlack,
+      kShaderTexEnvRed,
+      kShaderTexEnvGray,
+      kShaderTexEnvGrey, // TODO: synonims
+      kShaderTexEnvGrayscaleRamp,
+      kShaderTexEnvGreyscaleRamp, // TODO: synonims
+      kShaderTexEnvBump,
+      kShaderTexEnvBlackCube,
+      kShaderTexEnvLightmap,
+      kShaderTexEnvUnityLightmapLight,
+      kShaderTexEnvUnityLightmapDir,
+      kShaderTexEnvUnityShadowMask,
+      kShaderTexEnvUnityDynamicLightmap,
+      kShaderTexEnvUnityDynamicDirectionality,
+      kShaderTexEnvUnityDynamicNormal,
+      kShaderTexEnvDitherMaskLOD,
+      kShaderTexEnvDitherMaskLOD2D,
+      kShaderTexEnvRandomRotation,
+      kShaderTexEnvNHxRoughness,
+      kShaderTexEnvSpecCube,
+      kShaderTexEnvSpecCube1,
+      kShaderTexEnvProbeVolumeSH,
+      kShaderTexEnvCount
+   };
+   如kShaderTexEnvSpecCube就是用于shader中的unity_SpecCube0，用于在UnityGI_IndirectSpecular中计算IBL间接高光。在C++中可以在ReflectionProbeCache.cpp中看到生成过程。
