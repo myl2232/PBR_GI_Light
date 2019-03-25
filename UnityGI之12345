@@ -37,7 +37,8 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
       ...
       half3 env0 = Unity_GlossyEnvironment (UNITY_PASS_TEXCUBE(unity_SpecCube0), data.probeHDR[0], glossIn);
   }
-
+  
+  ----------------------------------------------------------------------------------------
 5. GfxDeviceObjects.h定义了一些的全局贴图，如IBL需要的全局高光
    enum BuiltinPerRendererTexture
    {
@@ -54,7 +55,7 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
    ScriptableBatchRender.cpp包含了它们的生成使用过程，这个类的使用范围宏定义如下：
    #define     GFX_SUPPORTS_SRP_BATCHER        ((GFX_SUPPORTS_D3D11 || GFX_SUPPORTS_VULKAN || PLATFORM_PS4 || GFX_SUPPORTS_METAL) && (!GFX_SUPPORTS_XBOXONE))
    ----------------------------------------------------------------------以上应该没用到mobile------------------------------------
-   BuiltinShaderProgramsName.h定义了所有的全局环境贴图，如下：
+   BuiltinShaderProgramsName.h定义了所有的全局环境贴图，如下：(以及全局变换矩阵，vec4变量等)
    enum BuiltinShaderTexEnvParam
    {
       kShaderTexEnvWhite = 0,
@@ -114,3 +115,58 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
    bool BakeContextManager::RenderLightmaps(const Hash128& hash, BakeLightmapTechnique* lightmapBake)
    bool LightmapBakeTechnique::Bake()---这里面填充了很多rl需要的参数
    void RenderTechnique::RenderFrame()----这是OpenRL的一套光线跟踪渲染插件的包装
+
+8. 环境光及lightmapuv来源：(对第2条的补充)
+   inline half4 VertexGIForward(VertexInput v, float3 posWorld, half3 normalWorld)
+   {
+     ...unity_LightmapST
+     ...unity_DynamicLightmapST
+   }
+   关注C++中kShaderVecUnityLightmapST以及kShaderVecUnityDynamicLightmapST，它们是构成环境光的主要部分。
+   RenderNode的数据部分struct SharedRendererData，包含了
+   Vector4f m_LightmapST[kLightmapTypeCount];       ///< Lightmap tiling and offset
+   由此通过LightmapSTCache::ApplyLightmapST(..)传入shader中unity_LightmapST或unity_DynamicLightmapST
+   算出ambientOrLightmapUV.xyzw(xy是静态lightmapuv，zw是动态lightmapuv。但是：如果开启了球协光照，即lightprob，
+   那么ambientOrLightmapUV.rgb是直接作为环境光提供的)
+
+   之后才是UnityGI_Base下对于这个uv的使用。
+
+9. 主要的前向渲染过程如下：
+   void DoForwardShaderRenderLoop(
+    const RenderLoopContext& ctx,
+    RenderObjectDataContainer& objects,
+    const CullResults& cullResults,
+    bool opaque,
+    bool disableDynamicBatching,
+    bool clearFrameBuffer,
+    Camera::RenderFlag cameraRenderFlag)
+    {
+      ForwardShaderRenderLoop* renderLoop;
+      ...
+    }
+    其中，处理shadow的步骤如下：
+    renderLoop->PrepareShadowMaps(mainDirShadowLight, cullResults);
+    const ShadowMapJobHeader* PrepareShadowMaps(const CullResults& cullResults, const ActiveLight& activeLight, const MinMaxAABB& receiverBounds)
+    ...
+    其次，核心的渲染流程如下：
+    renderLoop->PerformRendering()--调用入口
+    ~~~~~~~~~~~~~~~~
+    StartRenderJobs(renderPassDataSortFence, opaque, mixShadowMaskAndRealtimeShadow, defaultPassContext);---调用如下：
+    device.ExecuteAsync(...)---调用如下：
+    static void ForwardRenderLoopJob(GfxDeviceAsyncCommand::ArgScratch* scratch, const GfxDeviceAsyncCommand::Arg* arg)---核心流程
+    ~~~~~~~~
+    可以看到预处理shadow是最外面的函数PrepareShadowMaps()来做的，主要是根据CullResult做了一次删减。通过五个队列来判断，一般只有前两个起作用，如下：
+    enum
+    {
+        kStaticRenderers = 0,
+        kDynamicRenderer,
+        kSceneIntermediate,
+        kCameraIntermediate,
+    #if ENABLE_TERRAIN
+        kTreeRenderer,
+    #endif
+        kVisibleListCount
+    };
+
+10. shadow采用PSSM，全屏shadow开启SHADOWS_SCREEN，点光源shadow开启SHADOWS_CUBE, 探照灯光源开启SHADOWS_DEPTH.
+    unity_ShadowFadeCenterAndType.xyz--shadow中心位置，w-是否采用球形裁剪(一般是true)
