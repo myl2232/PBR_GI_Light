@@ -168,5 +168,31 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
         kVisibleListCount
     };
 
-10. shadow采用PSSM，全屏shadow开启SHADOWS_SCREEN，点光源shadow开启SHADOWS_CUBE, 探照灯光源开启SHADOWS_DEPTH.
+10. shadow采用PSSM，SpotLight全屏shadow开启SHADOWS_SCREEN，点光源shadow开启SHADOWS_CUBE, directional光源开启SHADOWS_DEPTH.
     unity_ShadowFadeCenterAndType.xyz--shadow中心位置，w-是否采用球形裁剪(一般是true)
+
+11. shadowd使用：
+    void ForwardShaderRenderLoop::RenderForwardShadowMaps(...)
+    ||
+    // shadow map of main directional light
+    if (m_MainShadowMap.shadowCachingData || m_MainShadowMap.shadowJobHeader)--shadowJobHeader为true的时候为实时阴影(PSSM)
+        RenderLightShadowMaps(m_MainShadowMap, enableSoftShadows, clearFrameBuffer, passContext);
+    PCF只用于soft shadow模式，消耗比较大
+
+12. BatchRender是底层使用的渲染器。
+    RenderNode.h 中 ExecuteBatchedCallback executeBatchedCallback; 
+    配置了多种BatchRender,如 RenderMultipleMeshes(..), BillboardRenderer_RenderMultiple(..),
+    DrawInstancedMeshIntermediateRendererWithInstancing(..), DrawIndirectMeshIntermediateRendererBatched(..),
+    DrawUtil::DrawLineOrTrailFromNodeQueue(..), s_MultipleRenderCallback[0][maskInteraction](..), DrawSpriteBatchedFromNodeQueue(..),
+    总入口void BatchRenderer::EndLoopFlush()
+    静态合批的条件：
+    node.rendererData.m_StaticBatchInfo.subMeshCount > 0
+    动态合批的条件：
+    bool useDynamicBatching = meshBuffers.indexBuffer != NULL
+                && renderData.extraArgs->enableDynamicBatching
+                && batchIndexCount < kDynamicBatchingIndicesThreshold
+                && topology != kPrimitiveLineStrip
+                && secondaryMesh == NULL
+                && !IsOddNegativeScaleTransform(node.rendererData.m_TransformInfo.transformType)
+                && CanUseDynamicBatching(*mesh, dynamicBatchChannels, batchVertexCount, firstSubMesh.baseVertex)
+    很苛刻，最终还是走void DrawUtil::DrawMeshRawFromNodeQueue(...)
