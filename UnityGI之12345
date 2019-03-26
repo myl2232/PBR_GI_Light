@@ -172,7 +172,7 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
     unity_ShadowFadeCenterAndType.xyz--shadow中心位置，w-是否采用球形裁剪(一般是true)
 
 11. shadowd使用：
-    void ForwardShaderRenderLoop::RenderForwardShadowMaps(...)
+    void ForwardShaderRenderLoop::RenderForwardShadowMaps(...)---一切的开始
     ||
     // shadow map of main directional light
     if (m_MainShadowMap.shadowCachingData || m_MainShadowMap.shadowJobHeader)--shadowJobHeader为true的时候为实时阴影(PSSM)
@@ -196,3 +196,10 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
                 && !IsOddNegativeScaleTransform(node.rendererData.m_TransformInfo.transformType)
                 && CanUseDynamicBatching(*mesh, dynamicBatchChannels, batchVertexCount, firstSubMesh.baseVertex)
     很苛刻，最终还是走void DrawUtil::DrawMeshRawFromNodeQueue(...)
+
+    m_Context->m_Camera->SetupRender(passContext, cameraRenderFlag | Camera::kRenderFlagSetRenderTarget);
+    完成最终的backbuffer拷贝，并复制到屏幕。
+
+13. GfxDevice.h---通过相机访问以下两个常用rt
+    RenderSurfaceHandle m_BackBufferColor;
+    RenderSurfaceHandle m_BackBufferDepth;
