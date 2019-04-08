@@ -174,7 +174,7 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
         kVisibleListCount
     };
 
-10. shadow采用PSSM，SpotLight全屏shadow开启SHADOWS_SCREEN，点光源shadow开启SHADOWS_CUBE, directional光源开启SHADOWS_DEPTH.
+10. shadow采用PSSM，全屏shadow开启SHADOWS_SCREEN，点光源shadow开启SHADOWS_CUBE, directional光源开启SHADOWS_DEPTH.
     unity_ShadowFadeCenterAndType.xyz--shadow中心位置，w-是否采用球形裁剪(一般是true)
 
 11. shadowmap使用：
@@ -215,3 +215,18 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
     unity_MetaFragmentControl.x--Albedo
     unity_MetaFragmentControl.y--Emissive
     DrawUtil::DrawMeshRaw(vertexInput, *mesh1, subsets[i].second, instanceID, mesh2);--最后调用
+
+15. shadow各项feature的组合体现在AutoLight.cginc(前向)
+    half UnityComputeForwardShadows(float2 lightmapUV, float3 worldPos, float4 screenPos)
+    {...}          详解如下：
+    (1)烘焙阴影要么来自shadowmask，要么来自LPPV(动态对象)。ShadowMask模式在LightMap_On开启的时候从ShadowMask中取阴影，否则通过LPPV，而非ShadowMask模式只能通过LPPV取得阴影。
+    //baked occlusion if any
+    half shadowMaskAttenuation = UnitySampleBakedOcclusion(lightmapUV, worldPos);    
+    (2)平行光的动态阴影(前提是没有用CSM的情况下，必须开启SHADOWS_SCREEN)
+    //directional realtime shadow
+    #if defined (SHADOWS_SCREEN)
+        #if defined(UNITY_NO_SCREENSPACE_SHADOWS) && !defined(UNITY_HALF_PRECISION_FRAGMENT_SHADER_REGISTERS)
+            realtimeShadowAttenuation = unitySampleShadow(mul(unity_WorldToShadow[0], unityShadowCoord4(worldPos, 1)));
+    (3)SpotLight阴影需要开启SHADOWS_DEPTH，点光源阴影需要开启SHADOWS_CUBE,
+       它们都通过inline fixed UnitySampleShadowmap (float4 shadowCoord)计算实时阴影。
+       这个时候可以看到软阴影的作用，PCF等
