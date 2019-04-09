@@ -239,6 +239,7 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
     const bool screenSpaceShadows = tierSettings.useCascadedShadowMaps && CanUseCascadedShadowMaps(compiler);
     keywords->set(kNoScreenSpaceShadows, !screenSpaceShadows);
     AutoLight.cginc一开始就声明了各项宏，正常情况下平行光走第一个分支(SHADOWS_SCREEN)+(UNITY_NO_SCREENSPACE_SHADOWS)
+    移动平台默认是关掉CSM的，即使在QualitySetting中开启了也一样。(C++中调试)
 20. half4 _LightShadowData,如下
     // R = 1-strength
     // G = 1.0 / shadowDistance
