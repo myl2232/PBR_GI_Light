@@ -244,8 +244,22 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
     // G = 1.0 / shadowDistance
     // B = 1.0 / (shadowDistance - shadowStartFade)
     // A = -shadowStartFade / (shadowDistance - shadowStartFade)
-    理论上最终的shadow来自shadowmap和shaowmask的最小的那个(shadowMask/subtructive),或lerp插值(RealtimeShadow/DistanceShadow)，即
+    理论上点光源或spotlight最终的shadow来自shadowmap和shaowmask的最小的那个(shadowMask/subtructive),或lerp插值(RealtimeShadow/DistanceShadow)
     // Used by both the forward and the deferred rendering path
     half UnityMixRealtimeAndBakedShadows(half realtimeShadowAttenuation, half bakedShadowAttenuation, half fade)
     {...}
     默认开启LIGHTMAP_SHADOW_MIXING
+
+21. fragForwardBaseInternal——>UNITY_LIGHT_ATTENUATION(atten, i, s.posWorld)
+                           ——>#define UNITY_SHADOW_ATTENUATION(a, worldPos) SHADOW_ATTENUATION(a)
+                           ——>#define SHADOW_ATTENUATION(a) unitySampleShadow(a._ShadowCoord)---最简单的平行光阴影
+                           ——>fixed shadow = UNITY_SAMPLE_SHADOW(_ShadowMapTexture, shadowCoord.xyz);
+                             shadow = _LightShadowData.r + shadow * (1-_LightShadowData.r);
+                             return shadow;
+    ...#define LIGHT_ATTENUATION(a) SHADOW_ATTENUATION(a)已经不用了，(4.x版本使用)
+
+22.vec4 _ProjectionParams:(https://www.jianshu.com/p/df878a386bec)
+   x = lightZFar / (lightZNear - lightZFar),
+   y = (lightZNear * lightZFar) / (lightZNear - lightZFar), 
+   z = light.GetShadowBias(), 
+   w = light.GetShadowScaleBias()
