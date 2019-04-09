@@ -230,3 +230,22 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
     (3)SpotLight阴影需要开启SHADOWS_DEPTH，点光源阴影需要开启SHADOWS_CUBE,
        它们都通过inline fixed UnitySampleShadowmap (float4 shadowCoord)计算实时阴影。
        这个时候可以看到软阴影的作用，PCF等
+
+16. CSM只是增加了阴影计算复杂度，没有增加批次。如同PCF一样？
+17. UnitySampleShadowmap(注意大写首字母！)是针对点光和spotlight的阴影计算，而unitySampleShadow则是针对开启SHADOWS_SCREEN的情况，即平行主光。
+18. RealtimeLightmap补充：开启lighting中RealtimeLightmap,对需要实时gi的对象开启emissive及其GlobalRealtimeGI选项，并勾上static做烘焙。
+19. C++中看到，如果开启了CSM，那么shader中UNITY_NO_SCREENSPACE_SHADOWS为false。即认为CSM是全屏阴影。如下：
+    // Shadows
+    const bool screenSpaceShadows = tierSettings.useCascadedShadowMaps && CanUseCascadedShadowMaps(compiler);
+    keywords->set(kNoScreenSpaceShadows, !screenSpaceShadows);
+    AutoLight.cginc一开始就声明了各项宏，正常情况下平行光走第一个分支(SHADOWS_SCREEN)+(UNITY_NO_SCREENSPACE_SHADOWS)
+20. half4 _LightShadowData,如下
+    // R = 1-strength
+    // G = 1.0 / shadowDistance
+    // B = 1.0 / (shadowDistance - shadowStartFade)
+    // A = -shadowStartFade / (shadowDistance - shadowStartFade)
+    理论上最终的shadow来自shadowmap和shaowmask的最小的那个(shadowMask/subtructive),或lerp插值(RealtimeShadow/DistanceShadow)，即
+    // Used by both the forward and the deferred rendering path
+    half UnityMixRealtimeAndBakedShadows(half realtimeShadowAttenuation, half bakedShadowAttenuation, half fade)
+    {...}
+    默认开启LIGHTMAP_SHADOW_MIXING
