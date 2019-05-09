@@ -231,7 +231,7 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
        它们都通过inline fixed UnitySampleShadowmap (float4 shadowCoord)计算实时阴影。
        这个时候可以看到软阴影的作用，PCF等
 
-16. CSM只是增加了阴影计算复杂度，没有增加批次。如同PCF一样？
+16. CSM在移动平台被限制为只有一个cascade，即等同于没有开启。
 17. UnitySampleShadowmap(注意大写首字母！)是针对点光和spotlight的阴影计算，而unitySampleShadow则是针对开启SHADOWS_SCREEN的情况，即平行主光。
 18. RealtimeLightmap补充：开启lighting中RealtimeLightmap,对需要实时gi的对象开启emissive及其GlobalRealtimeGI选项，并勾上static做烘焙。
 19. C++中看到，如果开启了CSM，那么shader中UNITY_NO_SCREENSPACE_SHADOWS为false。即认为CSM是全屏阴影。如下：
