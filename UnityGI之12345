@@ -264,3 +264,5 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
    y = (lightZNear * lightZFar) / (lightZNear - lightZFar), 
    z = light.GetShadowBias(), 
    w = light.GetShadowScaleBias()
+
+23. normalWorld在GI中用到两处，一个是球协光照，一个是dir lightmap，参见Unity_GI(..)
