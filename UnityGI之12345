@@ -266,3 +266,5 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
    w = light.GetShadowScaleBias()
 
 23. normalWorld在GI中用到两处，一个是球协光照，一个是dir lightmap，参见Unity_GI(..)
+
+24.最终的光照计算总结的好啊：(Diffuse + Specular) * shadow + (IndirectDiffuse + IndirectSpecular) * AO;
