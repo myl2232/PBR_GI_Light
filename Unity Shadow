@@ -1,0 +1,6 @@
+1. SHADOWS_SCREEN是是否接受投影的关键。在引擎层面，Opaque和Alphatest队列的对象都会开启这个关键字，而Transparent队列则会关闭。
+   阴影的作用通过UNITY_SHADOW_ATTENUATION(...)施加在渲染对象上。
+   UnityGI_Base(UnityGIInput data, half occlusion, half3 normalWorld)
+   {
+       o_gi.light.color *= data.atten;
+   }
