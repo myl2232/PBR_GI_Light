@@ -3,4 +3,48 @@
    UnityGI_Base(UnityGIInput data, half occlusion, half3 normalWorld)
    {
        o_gi.light.color *= data.atten;
-   }
+   }    
+
+2. 观察堆栈：
+    ForwardShaderRenderLoop::PrepareShadowMaps()
+    --SetupLightContext()
+    ----PrepareShadowMaps()
+    ------PrepareShadowMapJobHeader()  -----// Create data for jobs
+    平行光&透视视图才可用cascade shadow map(PSSM),不开启CSM时则splitCount=1,主要工作就是填充shadowHeader，如.dirData
+    generare caster queue-->BeginRenderQueueExtraction()
+    shadowHeader.depthFormat = settings.prefer32BitShadowMaps ? kDepthFormatMin24bits_Stencil : kDepthFormatMin16bits_NoStencil;
+    enum DepthBufferFormat
+    {
+    kDepthFormatNone = 0,   // no depth buffer (d3d11 graphics caps depends on this being the first enum value)
+    kDepthFormatMin16bits_NoStencil,    // at least 16 bits depth buffer, no stencil                              ********
+    kDepthFormatMin24bits_Stencil,      // at least 24 bits depth buffer, with a stencil
+    kDepthFormatCount       // keep this last!
+    };
+    allow high quality shadow ---> #define kVRAMEnoughForLargeShadowmaps 480   // VRAM MB after which we allow even higher resolution shadow maps
+    最终：
+    JobDataGuardian::ScheduleJobGuarded(shadowHeader.prepareShadowMapsFence, PrepareShadowMapsJob, headerPtr);
+
+2.1 PrepareShadowMapsJob:
+   - Prepares the shadowmap header.
+   - Culls the directional cascades
+   - Calculates the shadow matrices
+   split划分规则：1x1,2x1,2x2  shadowHeader.dirData.cascadeCount=0(不开启csm)
+   ----SetupDirectionalLightShadowCamera(..., const MinMaxAABB& casterBounds, ShadowCascadeInfo& outCascade)
+   Do initial light placement
+   -Vector3f initialLightPos = center - axisZ * castersRadius * 1.2f;
+   -outCascade.lightMatrix.SetPositionAndOrthoNormalBasis(initialLightPos, axisX, axisY, axisZ);
+    获得阴影矩阵，outCascade.shadowMatrix
+
+2.2 static void PrepareShadowMapsJob(ShadowMapJobHeader* userData)
+   {
+       ...
+       MultiplyMatrices4x4(&texMatrix, &cascade.shadowMatrix, &outShadowMatrices[splitIndex]);
+   }     
+   阴影矩阵用于输出到ps进行采样，
+   有一个同步顺序：
+    // make sure the prepareShadowMap jobs are done.
+    SyncFence(shadowHeader.prepareShadowMapsFence);---同步上一帧的数据
+    // initialize state
+    PrepareStateForShadowMap(header, passContext);----重新准备数据
+
+3. ForwardShaderRenderLoop::RenderForwardShadowMaps(...)
