@@ -268,3 +268,36 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
 23. normalWorld在GI中用到两处，一个是球协光照，一个是dir lightmap，参见Unity_GI(..)
 
 24.最终的光照计算总结的好啊：(Diffuse + Specular) * shadow + (IndirectDiffuse + IndirectSpecular) * AO;
+
+25.GI(含实时)的补充2 ：
+   烘焙阶段：
+        Light组件开启Realtime Shadows的意义(_LightShadowData)：
+        观察ForwardShaderRenderLoop::CollectShadows(...)
+                ---ForwardShaderRenderLoop::SetLightShadowProps(...)
+        Strength属性存放于_LightShadowData.x = 1 - Strength;其他如下
+        (_LightShadowData).y = camera.GetFar() / shadowDistance;
+        const float shadowStartFade = shadowSphereRange - shadowDistance * kShadowFadeRange;
+        const float shadowFadeInvLen = 1.0f / (shadowSphereRange - shadowStartFade);
+        (_LightShadowData).z = shadowFadeInvLen;
+        (_LightShadowData).w = -shadowStartFade * shadowFadeInvLen;
+   
+   渲染阶段：
+        HardShadow : 
+        fixed shadow = UNITY_SAMPLE_SHADOW(_ShadowMapTexture, shadowCoord);
+        shadow = lerp(_LightShadowData.r, 1.0, shadow);
+        SoftShadow :
+        half shadow = UnitySampleShadowmap_PCF5x5(coord, receiverPlaneDepthBias);
+        shadow = lerp(_LightShadowData.r, 1.0, shadow);
+        即Strength在最终shadow中的作用是：Shadow(即attenuation) = (1-Strength) * (1 - SampleShadow) + SampleShadow; 
+        
+        UnityGI UnityGI_Base(UnityGIInput data, half occlusion, half3 normalWorld)
+            ---half3 SubtractMainLightWithRealtimeAttenuationFromLightmap (half3 lightmap, half attenuation, half4 bakedColorTex, half3 normalWorld)
+
+       // 1) Gives good estimate of illumination as if light would've been shadowed during the bake.
+        //  Preserves bounce and other baked lights
+        //  No shadows on the geometry facing away from the light
+        half3 realtimeShadow = max (lightmap - ndotl * (1-attenuation) *_LightColor0.rgb, shadowColor);
+        // 2) Allows user to define overall ambient of the scene and control situation when realtime shadow becomes too dark.
+        realtimeShadow = lerp(realtimeShadow, lightmap, _LightShadowData.x);
+        // 3) Pick darkest color
+        return min(lightmap, realtimeShadow);
