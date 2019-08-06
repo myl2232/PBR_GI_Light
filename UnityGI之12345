@@ -272,6 +272,7 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
 25.GI(含实时)的补充2 ：
    烘焙阶段：
         Light组件开启Realtime Shadows的意义(_LightShadowData)：
+        正如其名字所示，只对实时阴影起作用，参数_LightShadowData也只有实时意义。
         观察ForwardShaderRenderLoop::CollectShadows(...)
                 ---ForwardShaderRenderLoop::SetLightShadowProps(...)
         Strength属性存放于_LightShadowData.x = 1 - Strength;其他如下
@@ -301,3 +302,42 @@ o_gi.indirect.diffuse= SubtractMainLightWithRealtimeAttenuationFromLightmap (
         realtimeShadow = lerp(realtimeShadow, lightmap, _LightShadowData.x);
         // 3) Pick darkest color
         return min(lightmap, realtimeShadow);
+        总结：可以看到阴影最终是由实时阴影和静态阴影(shadowmap)两部分组成。
+
+26. ShadowMap的size：(qualityShift来自QualitySettings的Shadows->Shadow Resolution)
+    /* shadow quality (0 = best, larger numbers worse)*/
+    qualityShift = kQSShadowResolutionCount - 1 - lightShadowResolution;//4-1-resolution
+    int CalculateShadowMapSize(...,int qualityShift,...)
+    const float kMultPoint = 1.0f; // Assume "Very High" shadow map resolution is 1x screen size for point lights.
+    const float kMultSpot = 2.0f;  // Assume "Very High" shadow map resolution is 2x screen size for spot lights.
+    const float kMultDir = 3.8f;   // Assume "Very High" shadow map resolution is almost 4x of screen size for directional lights.
+    对于Directional Light，size的大小如下：(1220x707的屏幕，得到2048的size)
+    int viewSize = int(std::max(cullData.viewWidth, cullData.viewHeight));
+    mapSize = NextPowerOfTwo(int(viewSize * kMultDir));
+    mapSize >>= qualityShift;
+
+27. QualitySettings的传值过程：ShadowCulling.cpp
+    void SetupShadowCullData(const ScriptableCullingParameters& cameraPropertiesParam, 
+                            const ShaderReplaceData& shaderReplaceData, 
+                            const SceneCullingParameters* sceneCullParams, 
+                            float shadowDistance, ShadowProjection shadowProjection, ShadowCullData& cullData)
+    {
+        ...
+        cullData.shadowDistance = shadowDistance;
+        ...
+    }
+    shadow使用这些参数值：
+    // from Parallel Split Shadow Maps paper: practical splitting scheme
+    // outDistances is array of size [splitCount+1] with near&far distances for each split
+    // outPercentages is the same, only percentages of shadowFarPlane distance (0.5 = 50% of distance)
+    static void CalculatePSSMDistances(float nearPlane, float shadowFarPlane, int splitCount, float* outDistances, float* outPercentages)
+    {
+        ...
+        outDistances[splitCount] = shadowFarPlane;//shadowFarPlane即ShadowDistance, outDistances数组大小为 kMaxShadowCascades + 1;
+    }
+    // fill the unused shadow cascade distances with consistent data (just slightly larger value for each).
+    shadowHeader.dirData.splitDistances[i] = shadowHeader.dirData.splitDistances[i - 1] * 1.01f;
+    顾名思义，上一级cascade distance与下一级在size上是1.01倍的关系。
+    最后补充：
+    static bool CalculateSphericalShadowRange(...)
+    ---如果投影方式不是kShadowProjCloseFit，则采用cullData.useSphereCulling，使用此函数获取的阴影半径，否则直接使用设置的shadowDistance
