@@ -48,3 +48,81 @@
     PrepareStateForShadowMap(header, passContext);----重新准备数据
 
 3. ForwardShaderRenderLoop::RenderForwardShadowMaps(...)
+
+4.GI(含实时)的补充：
+   烘焙阶段：
+        Light组件开启Realtime Shadows的意义(_LightShadowData)：
+        正如其名字所示，只对实时阴影起作用，参数_LightShadowData也只有实时意义。
+        观察ForwardShaderRenderLoop::CollectShadows(...)
+                ---ForwardShaderRenderLoop::SetLightShadowProps(...)
+        Strength属性存放于_LightShadowData.x = 1 - Strength;其他如下
+        (_LightShadowData).y = camera.GetFar() / shadowDistance;
+        const float shadowStartFade = shadowSphereRange - shadowDistance * kShadowFadeRange;
+        const float shadowFadeInvLen = 1.0f / (shadowSphereRange - shadowStartFade);
+        (_LightShadowData).z = shadowFadeInvLen;
+        (_LightShadowData).w = -shadowStartFade * shadowFadeInvLen;
+   
+   渲染阶段：
+        HardShadow => fixed shadow = UNITY_SAMPLE_SHADOW(_ShadowMapTexture, shadowCoord);        
+                      shadow = lerp(_LightShadowData.r, 1.0, shadow);
+        SoftShadow => half shadow = UnitySampleShadowmap_PCF5x5(coord, receiverPlaneDepthBias);        
+                      shadow = lerp(_LightShadowData.r, 1.0, shadow);
+        即Strength在最终shadow中的作用是：Shadow(即attenuation) = (1-Strength) * (1 - SampleShadow) + SampleShadow; 
+        
+        UnityGI UnityGI_Base(UnityGIInput data, half occlusion, half3 normalWorld)
+            ---half3 SubtractMainLightWithRealtimeAttenuationFromLightmap (half3 lightmap, half attenuation, half4 bakedColorTex, half3 normalWorld)
+
+       // 1) Gives good estimate of illumination as if light would've been shadowed during the bake.
+        //  Preserves bounce and other baked lights
+        //  No shadows on the geometry facing away from the light
+        half3 realtimeShadow = max (lightmap - ndotl * (1-attenuation) *_LightColor0.rgb, shadowColor);
+        // 2) Allows user to define overall ambient of the scene and control situation when realtime shadow becomes too dark.
+        realtimeShadow = lerp(realtimeShadow, lightmap, _LightShadowData.x);
+        // 3) Pick darkest color
+        return min(lightmap, realtimeShadow);
+        总结：可以看到阴影最终是由实时阴影和静态阴影(shadowmap)两部分组成。
+
+5. ShadowMap的size：(qualityShift来自QualitySettings的Shadows->Shadow Resolution)
+    /* shadow quality (0 = best, larger numbers worse)*/
+    qualityShift = kQSShadowResolutionCount - 1 - lightShadowResolution;//4-1-resolution
+    int CalculateShadowMapSize(...,int qualityShift,...)
+    const float kMultPoint = 1.0f; // Assume "Very High" shadow map resolution is 1x screen size for point lights.
+    const float kMultSpot = 2.0f;  // Assume "Very High" shadow map resolution is 2x screen size for spot lights.
+    const float kMultDir = 3.8f;   // Assume "Very High" shadow map resolution is almost 4x of screen size for directional lights.
+    对于Directional Light，size的大小如下：(1220x707的屏幕，得到2048的size)
+    int viewSize = int(std::max(cullData.viewWidth, cullData.viewHeight));
+    mapSize = NextPowerOfTwo(int(viewSize * kMultDir));
+    mapSize >>= qualityShift;
+
+6.  QualitySettings的传值过程：ShadowCulling.cpp
+    void SetupShadowCullData(const ScriptableCullingParameters& cameraPropertiesParam, 
+                            const ShaderReplaceData& shaderReplaceData, 
+                            const SceneCullingParameters* sceneCullParams, 
+                            float shadowDistance, ShadowProjection shadowProjection, ShadowCullData& cullData)
+    {
+        ...
+        cullData.shadowDistance = shadowDistance;
+        ...
+    }
+    splitCount = 2 或 4。
+    shadow使用这些参数值：
+    // from Parallel Split Shadow Maps paper: practical splitting scheme
+    // outDistances is array of size [splitCount+1] with near&far distances for each split
+    // outPercentages is the same, only percentages of shadowFarPlane distance (0.5 = 50% of distance)
+    static void CalculatePSSMDistances(float nearPlane, float shadowFarPlane, int splitCount, float* outDistances, float* outPercentages)
+    {
+        ...
+        outDistances[splitCount] = shadowFarPlane;//shadowFarPlane即ShadowDistance, outDistances数组大小为 kMaxShadowCascades + 1;
+    }
+    如果cascade < splitCount, 第一级为cameraNear，然后 outDistances[splitCount] = shadowDistance, 其他分别为outDistances[i] = nearPlane + (shadowFarPlane - nearPlane) * outPercentages[i];
+    如果cascade > splitCount, 那么shadowHeader.dirData.splitDistances[i] = shadowHeader.dirData.splitDistances[i - 1] * 1.01f，即上一级cascade distance与下一级在
+        size上是1.01倍的关系。// fill the unused shadow cascade distances with consistent data (just slightly larger value for each).
+    示例：shadowDistance=70，Two Cascade，五级distance分别为(0.069 , 23.578 , 70 , 70.699 , 71.406)
+    RenderTexture* ForwardShaderRenderLoop::CollectShadows(...)---渲染阴影时使用splitDistance。
+    _LightSplitsNear = splitDistances[0]
+    _LightSplitsFar = splitDistances[1]
+    最后补充：
+    static bool CalculateSphericalShadowRange(...)
+    ---如果投影方式不是kShadowProjCloseFit，则采用cullData.useSphereCulling，使用此函数获取的阴影半径并存入cullData.shadowCullRadius，否则直接使用设置的shadowDistance。
+
+7. TierSettings具有决定意义，如GetGraphicsSettings().GetTierSettings().useCascadedShadowMaps，只有为true才能使用QualitySettings.shadowCascades。
