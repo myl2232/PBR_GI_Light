@@ -61,7 +61,12 @@
         const float shadowFadeInvLen = 1.0f / (shadowSphereRange - shadowStartFade);
         (_LightShadowData).z = shadowFadeInvLen;
         (_LightShadowData).w = -shadowStartFade * shadowFadeInvLen;
-   
+        最终调用RenderTexture* ComputeScreenSpaceShadowMap(...),返回生成的screenShadowMap,过程中根据相机空间画了一个远平面的QUAD, 赋值于shadowCachingData.shadowMap,
+        储存在ForwardShaderRenderLoop::m_Context.m_ShadowCache。
+        
+        UnityGI_Base:(混合了shadowmask--bakedAtten, 以及shadowmap--data.atten--经由shadowmap采样得到)，条件是已经开启shadowmask和realtimeShadow
+        data.atten = UnityMixRealtimeAndBakedShadows(data.atten, bakedAtten, UnityComputeShadowFade(fadeDist));
+
    渲染阶段：
         HardShadow => fixed shadow = UNITY_SAMPLE_SHADOW(_ShadowMapTexture, shadowCoord);        
                       shadow = lerp(_LightShadowData.r, 1.0, shadow);
@@ -126,3 +131,4 @@
     ---如果投影方式不是kShadowProjCloseFit，则采用cullData.useSphereCulling，使用此函数获取的阴影半径并存入cullData.shadowCullRadius，否则直接使用设置的shadowDistance。
 
 7. TierSettings具有决定意义，如GetGraphicsSettings().GetTierSettings().useCascadedShadowMaps，只有为true才能使用QualitySettings.shadowCascades。
+8. SetupObjectLightmaps(*renderLoop.m_LightmapSettings, rs.lightmapIndex, passContext)------设定各项shadow keyword
