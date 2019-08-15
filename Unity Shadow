@@ -24,12 +24,12 @@
     最终：
     JobDataGuardian::ScheduleJobGuarded(shadowHeader.prepareShadowMapsFence, PrepareShadowMapsJob, headerPtr);
 
-2.1 PrepareShadowMapsJob:
+2.1 PrepareShadowMapsJob:(主要是准备ShadowCaster)
    - Prepares the shadowmap header.
    - Culls the directional cascades
    - Calculates the shadow matrices
    split划分规则：1x1,2x1,2x2  shadowHeader.dirData.cascadeCount=0(不开启csm)
-   ----SetupDirectionalLightShadowCamera(..., const MinMaxAABB& casterBounds, ShadowCascadeInfo& outCascade)
+   ----SetupDirectionalLightShadowCamera(..., const MinMaxAABB& casterBounds, ShadowCascadeInfo& outCascade)--<非常庞杂，需要仔细研读>
    Do initial light placement
    -Vector3f initialLightPos = center - axisZ * castersRadius * 1.2f;
    -outCascade.lightMatrix.SetPositionAndOrthoNormalBasis(initialLightPos, axisX, axisY, axisZ);
@@ -37,8 +37,10 @@
 
 2.2 static void PrepareShadowMapsJob(ShadowMapJobHeader* userData)
    {
+       ExtractActiveCasterInfo(shadowHeader, casterBounds, casterAABBs);-->计算各个shadow bounds
        ...
        MultiplyMatrices4x4(&texMatrix, &cascade.shadowMatrix, &outShadowMatrices[splitIndex]);
+       
    }     
    阴影矩阵用于输出到ps进行采样，
    有一个同步顺序：
@@ -48,6 +50,20 @@
     PrepareStateForShadowMap(header, passContext);----重新准备数据
 
 3. ForwardShaderRenderLoop::RenderForwardShadowMaps(...)
+    shadowMap渲染路径。(每个RenderNode shader层面的ShadowCaster, 烘焙对象自然被剔除了)
+    void ForwardShaderRenderLoop::RenderForwardShadowMaps(...)
+    ---void ForwardShaderRenderLoop::RenderLightShadowMaps(...)
+    -------RenderTexture* RenderShadowMaps(...)
+    -----------RenderTexture::SetActive(shadowMap, 0, kCubeFaceUnknown, 0, rtFlags);--渲染到_ShadowMapTexture
+               PrepareHeadersForShadowJobs(jobs, jobCountPerSplit, splitCount, shadowHeader, passContext, shadowMap);--准备"(ShadowMapJobHeaderScratch** jobs)",即具备shadowcaster的对象
+               InvokeLightCommandBufferAllowAdd(shadowHeader.sharedLight, kRenderLightEvent_BeforeShadowMapPass...)
+               device.ExecuteAsync(jobCountPerSplit[splitIndex], ShadowMapJob, (GfxDeviceAsyncCommand::ArgScratch**)nextJobBatch, header, shadowHeader.prepareShadowMapsFence);
+               InvokeLightCommandBufferAllowAdd(shadowHeader.sharedLight, kRenderLightEvent_AfterShadowMapPass...)
+    ------------------static void ShadowMapJob(...)
+    再来分析ShadowMapJob():
+
+
+    最后，只有在ProjectSettings的Graphic Settings开启了cascade shadow，才会启动下一阶段CollectShadows。
 
 4.GI(含实时)的补充：
    烘焙阶段：
@@ -131,4 +147,8 @@
     ---如果投影方式不是kShadowProjCloseFit，则采用cullData.useSphereCulling，使用此函数获取的阴影半径并存入cullData.shadowCullRadius，否则直接使用设置的shadowDistance。
 
 7. TierSettings具有决定意义，如GetGraphicsSettings().GetTierSettings().useCascadedShadowMaps，只有为true才能使用QualitySettings.shadowCascades。
+
 8. SetupObjectLightmaps(*renderLoop.m_LightmapSettings, rs.lightmapIndex, passContext)------设定各项shadow keyword
+
+9. 
+
