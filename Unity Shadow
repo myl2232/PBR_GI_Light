@@ -150,5 +150,14 @@
 
 8. SetupObjectLightmaps(*renderLoop.m_LightmapSettings, rs.lightmapIndex, passContext)------设定各项shadow keyword
 
-9. 
-
+9. 烘焙阴影也受RealtimeShadow Strength调整的影响：
+   inline UnityGI UnityGI_Base(UnityGIInput data, half occlusion, half3 normalWorld)
+   {
+        .....
+       // Base pass with Lightmap support is responsible for handling ShadowMask / blending here for performance reason
+    #if defined(HANDLE_SHADOWS_BLENDING_IN_GI)
+        half bakedAtten = saturate(UnitySampleBakedOcclusion(data.lightmapUV.xy, data.worldPos))+_LightShadowData.x;
+        ...
+    #endif
+        .....
+   }
