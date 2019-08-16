@@ -150,7 +150,7 @@
 
 8. SetupObjectLightmaps(*renderLoop.m_LightmapSettings, rs.lightmapIndex, passContext)------设定各项shadow keyword
 
-9. 烘焙阴影也受RealtimeShadow Strength调整的影响：
+9. (优化)烘焙阴影也受RealtimeShadow Strength调整的影响：
    inline UnityGI UnityGI_Base(UnityGIInput data, half occlusion, half3 normalWorld)
    {
         .....
@@ -161,3 +161,4 @@
     #endif
         .....
    }
+10.    
