@@ -1,3 +1,3 @@
-# PBR_GI_Light
+# 渲染总结，主要针对Unity。
 
 渲染总结
